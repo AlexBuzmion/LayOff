@@ -145,6 +145,10 @@ cd LayOff
 | `FPSDisplay.cs` | Displays FPS on HUD. |
 | `MaterialData.cs` | Scriptable object that stores material-related data. |
 
+<h2>Usage</h2>
+
+<p>Launch the game, click `Create Room` and update the number of players that will join (1-4 only). After the game countdown, all players will be spawned in the office/world. Use the traps to hinder your opponents and be the first to escape!</p>
+
 <h2>Script Logic and Flow Explained</h2>
 
 <!-- SCENARIO1 -->
@@ -277,9 +281,104 @@ HUD Setup
 <pre><code>$ PlayerStatsEntry.cs updates keycard count on the HUD
 $ Player names and stats are displayed via HUDManager.cs
 </code></pre>
-<h2>Usage</h2>
 
-<p>Launch the game, click `Create Room` and update the number of players that will join (1-4 only). After the game countdown, all players will be spawned in the office/world. Use the traps to hinder your opponents and be the first to escape!</p>
+<!-- SCENARIO4 -->
+<h2 id="scenario4"> :small_orange_diamond: Keycard Search</h2>
+<p>The primary goal of the game is for players to collect keycards hidden within lootable props scattered throughout the environment. The keycard search process is driven by player interactions with these props and triggers several game mechanics that enhance gameplay and immersion.</p>
+<p align="center"> 
+<img src="./ReadMeAssets/keycardSearch.gif" alt="Keycard Search GIF">
+</p>
+Sequence of Events
+<p>When a player approaches a prop with an <code>InteractableObject.cs</code> script attached, the following sequence occurs:</p>
+<ul>
+  <li>The player enters the trigger volume of the interactable object (IO), activating the highlighter, and a HUD element appears, informing the player to press a specific button to search the prop.</li>
+  <li>Inside the <code>InteractableObject.cs</code> script, the <code>Interact()</code> method is called when the player presses the search button. This method performs a series of checks:</li>
+  <ul>
+    <li>First, it checks if the <code>hasTrap</code> boolean is true. If true, the trap sequence is initiated:</li>
+    <ul>
+      <li>A beeping red light game object within the IO is instantiated, signaling an imminent explosion.</li>
+      <li>The trap effect is triggered, controlled by <code>TrapEffect.cs</code>, which manages the explosion sequence.</li>
+    </ul>
+    <li>If the <code>hasTrap</code> boolean is false, the method proceeds to the next check:</li>
+    <li>If the <code>hasKeycard</code> boolean is true, the keycard collection sequence begins:</li>
+    <ul>
+      <li>A visual effect (VFX) is rendered to indicate that a keycard has been collected.</li>
+      <li>The <code>PlayerStatsManager.cs</code> updates the player's custom property for the keycard count, which automatically triggers an update to the keycard HUD.</li>
+      <li>The HUD element updates the keycard highlighter and increases the keycard count.</li>
+    </ul>
+  </ul>
+</ul>
+<p>Steps to search and collect keycards:</p>
+<pre><code>$ Approach a prop with InteractableObject.cs attached
+$ The highlighter and HUD prompt appear
+$ Press the button to search the prop
+$ If a trap is present, the TrapEffect is triggered
+$ If a keycard is present, it is collected and the HUD is updated
+</code></pre>
+Inventory Check and Final Door Activation
+<p>Each time a keycard is collected, the <code>InventoryManager.cs</code> performs a callback to check if all required keycards have been gathered. If all keycards are collected, the following events are triggered:</p>
+<ul>
+  <li>A game event signals the <code>FinalDoorBehavior.cs</code> to change the laser doors from red to green, indicating they are now unlocked.</li>
+  <li>The exit sign lights throughout the level change from green to red, signaling the available exit path.</li>
+  <li>The minimap HUD listens for this game event and highlights the center room with an exit sign, guiding players to the final door.</li>
+</ul>
+<p>Steps after collecting all keycards:</p>
+<pre><code>$ InventoryManager.cs checks if all keycards are collected
+$ FinalDoorBehavior.cs changes the laser doors to green
+$ Exit sign lights change color, and the minimap highlights the exit room
+</code></pre>
+
+<!-- SCENARIO5 -->
+<h2 id="scenario5"> :small_orange_diamond: Trap Placement</h2>
+<p>Trap placement is a strategic gameplay mechanic that allows players to hinder opponents by setting traps at key locations. The process involves several scripts that manage the selection, positioning, and confirmation of trap placement.</p>
+<p align="center"> 
+<img src="./ReadMeAssets/trapPlacement.gif" alt="Trap Placement GIF">
+</p>
+Sequence of Events
+<p>When a player presses keys 1-4, the <code>TrapSpawner.cs</code> script registers the selected trap and initiates the trap placement sequence:</p>
+<ul>
+  <li>The selected trap is rendered as a game object along with a line spawner that helps the player visualize where the trap will be placed.</li>
+  <li>The corresponding trap hologram is also displayed at the end of the line spawner, indicating the potential placement location.</li>
+</ul>
+<p>During this sequence:</p>
+<ul>
+  <li>The HUD is updated via <code>HUDManager.cs</code> to highlight the selected trap, showing a small detail section that includes the trap's name, where it can be set, and tips on how to avoid it.</li>
+  <li>The player's rotation, controlled by the mouse, allows repositioning of the trap hologram within the environment.</li>
+</ul>
+Trap Hologram Positioning
+<p>The trap's hologram script plays a crucial role in determining the validity of the placement location:</p>
+<ul>
+  <li>The hologram script shoots a raycast with specific layers it is looking for (e.g., floors, walls, or interactable objects).</li>
+  <li>If the raycast detects a valid placement area, the hologram is displayed in green; if the area is invalid, it appears gray.</li>
+  <li>Some traps are limited to being set on floors, some on walls, and others inside interactable objects only.</li>
+</ul>
+Confirming or Cancelling Trap Placement
+<p>Once the player finds a valid placement location:</p>
+<ul>
+  <li>The player can confirm the placement by left-clicking, which triggers the trap instantiation via <code>TrapEffect.cs</code> and <code>TrapTrigger.cs</code>.</li>
+  <li>If the player decides not to place the trap, they can right-click to cancel the placement, returning to normal gameplay.</li>
+</ul>
+<p>Additionally:</p>
+<ul>
+  <li>If the player performs any movement other than directional movement—such as dashing, crouching, shoving, or jumping—the trap placement mode is automatically canceled. This is handled by the <code>Enter/ExitTrapPlacementMode</code> method within <code>TrapSpawner.cs</code>.</li>
+</ul>
+Post-Placement Actions
+<p>If a trap is successfully placed, several actions are triggered:</p>
+<ul>
+  <li>The player's custom property for traps set is updated, specifying the trap type that was spawned, increasing the count of that specific trap type and the overall traps set.</li>
+  <li>The game automatically exits the trap placement mode after successfully setting the trap.</li>
+  <li>The trap's <code>TrapTrigger</code> script is instantiated, with specific traps inheriting from the base class <code>TrapTrigger</code> (e.g., <code>DetonatorTrap.cs</code>, <code>BouncingBetty.cs</code>, <code>CeilingTrap.cs</code>, <code>PoisonDart.cs</code>).</li>
+  <li>At instantiation, the owner ID of the trap is set using <code>PhotonNetwork.LocalActor.ActorNr</code>. This ID is passed to the <code>TrapEffect</code> child classes later when the trap is triggered to identify who inflicted damage.</li>
+  <li>The base class <code>TrapTrigger</code> starts a coroutine to enable the trap after a 3-second delay, during which the trap is initially disabled. This is visually demonstrated by a radial wheel filling up, showing the trap indicator above the trap for the trap owner, while making the game object invisible to the other players.</li>
+</ul>
+<p>Steps to place or cancel a trap:</p>
+<pre><code>$ Press 1-4 to select a trap
+$ The trap is rendered, and HUD updates with trap details via HUDManager.cs
+$ Rotate the mouse to reposition the trap hologram
+$ Confirm placement with left-click, or cancel with right-click or any non-directional movement
+$ If placed, custom properties are updated, and TrapTrigger is instantiated
+$ The trap becomes active after 3 seconds, indicated by a radial wheel and trap indicator
+</code></pre>
 
 <h2>Contributing</h2>
 <p>Fork the repository and submit a pull request with your improvements or bug fixes.</p>
