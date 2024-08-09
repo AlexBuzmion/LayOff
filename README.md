@@ -380,6 +380,111 @@ $ If placed, custom properties are updated, and TrapTrigger is instantiated
 $ The trap becomes active after 3 seconds, indicated by a radial wheel and trap indicator
 </code></pre>
 
+<!-- SCENARIO6 -->
+<h2 id="scenario6"> :small_orange_diamond: Trap Interactions with Other Game Objects</h2>
+<p>Once a trap is instantiated and activated, it can interact with other game objects, primarily players and other traps. The interaction sequence is managed through several base class functions and RPCs to ensure synchronization across all clients.</p>
+<p align="center"> 
+<img src="./ReadMeAssets/trapInteractions.gif" alt="Trap Interactions GIF">
+</p>
+Trap Trigger Activation
+<p>When a trap is instantiated and activated, it can interact with two types of objects: players and other traps.</p>
+<p>The interaction process begins when a player enters the trigger box of a trap:</p>
+<ul>
+  <li>The base class function <code>HandleTrapTrigger()</code> is called, but only the master client manages this function since all instantiated traps are owned by the master client.</li>
+  <li><code>HandleTrapTrigger()</code> initiates a coroutine that spawns the pre-effect for the trap, which is a unique effect based on the trap type. This pre-effect is synchronized across all clients via an RPC call:</li>
+  <ul>
+    <li>For the <code>PoisonDart</code>, this could be a dart shooting animation.</li>
+    <li>For the <code>BouncingBetty</code>, it could be an animation of the mine springing up and rotating.</li>
+    <li>For the <code>DetonatorTrap</code>, it could be a beeping sound and visual light effect signaling an imminent explosion.</li>
+  </ul>
+  <li>Once the pre-effect coroutine is completed, another coroutine is triggered to spawn the actual effect that can inflict damage on a player.</li>
+</ul>
+Trap Effect and Player Interaction
+<p>The spawned effect has a component that inherits from the <code>TrapEffect</code> base class, which handles the following:</p>
+<ul>
+  <li>It initializes the <code>trapOwnerId</code> by passing the owner ID from the trap trigger.</li>
+  <li>It includes a base <code>OnTriggerEnter()</code> or <code>OnCollisionEnter()</code> function that checks upon collision if the object that made contact has the layer "Player". If not, the function returns.</li>
+  <li>If a player is detected, the following sequence occurs:</li>
+  <ul>
+    <li>The <code>Death()</code> function in <code>CustomCharacterMovement.cs</code> is called to simulate the player's death.</li>
+    <li>An RPC is sent to all clients to trigger the specific character's <code>PerformDeath()</code> function, which handles the death animation and related effects:</li>
+    <ul>
+      <li><code>PerformDeath()</code> first checks if <code>isDead</code> is true to ensure the death sequence is only triggered once. If false, it sets <code>isDead</code> to true.</li>
+      <li>The function updates the player's death totals and death by specific trap type in <code>PlayerStatsManager.cs</code>.</li>
+      <li>The player's ragdoll is activated to animate the death sequence.</li>
+      <li>If the player has more than 0 keycards, a call to <code>KeycardManager.cs</code> is made to send an RPC targeting all clients to spawn a physical keycard in the world space at the player's position.</li>
+      <li>The spawned keycard, which has a <code>Keycard.cs</code> component, is animated to float and hover, making it easily visible to other players.</li>
+      <li>The keycard also includes an <code>OnTriggerEnter()</code> function that, when collected by a player, updates their keycard count, similar to when keycards are collected from props.</li>
+    </ul>
+    <li>A visual and sound effect (VFX and SFX) is spawned to notify other players of the death.</li>
+    <li>The function then calls <code>SendKillUpdate()</code>, passing the player game object as a parameter:</li>
+    <ul>
+      <li>It retrieves the <code>photonViewID.OwnerActorNr</code> of the victim and packages this information with the <code>trapOwnerId</code> and <code>trapType</code>.</li>
+      <li>This data is sent to <code>PlayerStatsManager.cs</code> to parse and update the custom properties of the player for kill totals and specific trap type kills.</li>
+      <li>The <code>PlayerStatsManager</code> also triggers a callback to <code>KillFeed.cs</code> to update the HUD, displaying who killed who, and with which trap.</li>
+      <li>The <code>PlayerStatsManager</code> has a callback to <code>CloudSave.cs</code> to update the specific kill and specific trap type kills as well.</li>
+    </ul>
+    <li>After the kill update, <code>PlayerSpawner.cs</code> updates the player character's transform position to one of the registered spawn points, effectively respawning the player.</li>
+  </ul>
+</ul>
+<p>Steps for trap interaction and player death:</p>
+<pre><code>$ Player enters the trap trigger box, HandleTrapTrigger() is called by the master client
+$ Pre-effect is spawned and synchronized via RPC
+$ TrapEffect component checks for player collision, triggering the Death() function in CustomCharacterMovement.cs
+$ PerformDeath() handles death animation, keycard drop, and updates PlayerStatsManager.cs
+$ SendKillUpdate() updates player stats, triggers KillFeed.cs for HUD update, and syncs with CloudSave.cs
+$ PlayerSpawner.cs respawns the player at a new spawn point
+</code></pre>
+
+<!-- SCENARIO7 -->
+<h2 id="scenario7"> :small_orange_diamond: Winning, Losing, and Game Over</h2>
+<p>This scenario covers the final stages of the game, from determining the winning player to displaying the final stats. It involves several scripts that manage the win/loss conditions, trigger the end-of-game sequence, and display detailed player statistics on the end game screen.</p>
+<p align="center"> 
+<img src="./ReadMeAssets/gameOver.gif" alt="Game Over GIF">
+</p>
+Winning and Losing Conditions
+<p>The win/loss conditions are managed primarily through the following scripts:</p>
+<ul>
+  <li><code>GameManager.cs</code>: Manages the overall game flow, including the conditions under which the game ends.</li>
+  <li><code>TimerManager.cs</code>: Tracks the game timer, determining if the game ends due to time running out.</li>
+  <li><code>WorldButtonInteractable.cs</code>: Attached to the winning button, this script handles player interactions to trigger the win condition. The script uses the <code>Interact()</code> method to raise a game event when the win button is pressed, signaling the end of the game.</li>
+  <li><code>HUDManager.cs</code>: Updates the HUD to reflect the game's end status, including which player won.</li>
+</ul>
+<p>The sequence begins when a player has gone through the final doors and interacts with the winning button:</p>
+<ul>
+  <li>Upon pressing the win button, the <code>WorldButtonInteractable.cs</code> script triggers the <code>onWinButtonPressed</code> event, which notifies the <code>GameManager.cs</code> to end the game.</li>
+  <li>If the game ends due to time running out, <code>TimerManager.cs</code> sends a notification to the <code>GameManager.cs</code>, which then determines the winning player based on the game’s criteria (e.g., most keycards collected).</li>
+  <li><code>HUDManager.cs</code> is updated to reflect the end-game state, showing a banner or message indicating the winning player or team.</li>
+</ul>
+<p>Steps to determine win/loss:</p>
+<pre><code>$ Player interacts with the win button via WorldButtonInteractable.cs
+$ GameManager.cs handles the win condition and ends the game
+$ HUDManager.cs updates the HUD with the game’s final status
+</code></pre>
+Game Over and Stats Display
+<p>After the win/loss conditions are met, the game transitions to the end game screen, displaying detailed player stats:</p>
+<ul>
+  <li><code>UIEndGame.cs</code>: Manages the display of data on the end game screen, including player kills, deaths, traps set, and MVP status.</li>
+  <li><code>PlayerStatsManager.cs</code>: Provides the statistical data for each player, which is then formatted and displayed by <code>UIEndGame.cs</code>.</li>
+  <li><code>LocalPlayerStatEntry.cs</code>: Displays the local player's detailed stats, including total kills, deaths, traps set, and MVP status.</li>
+  <li><code>OtherPlayerStatEntry.cs</code>: Displays the stats for other players, similar to the local player but with slightly less emphasis.</li>
+</ul>
+<p>The process for displaying stats is as follows:</p>
+<ul>
+  <li><code>UIEndGame.cs</code> triggers the <code>InitEndGameScreenData()</code> method, which retrieves all players' stats from <code>PlayerStatsManager.cs</code> and prepares them for display.</li>
+  <li>The <code>DisplayLocalPlayerStats()</code> method populates the local player's stat card with their performance data, including kills, deaths, traps set, and their MVP trap (if applicable).</li>
+  <li>Other players' stats are populated in similar fashion using the <code>OtherPlayerStatEntry.cs</code> script.</li>
+  <li>The <code>GameManager.cs</code> determines the winner based on the criteria set (e.g., most keycards, kills, etc.), and this information is displayed prominently on the end game screen.</li>
+  <li>The <code>UIEndGame.cs</code> script also animates the end game banner and displays additional accolades, such as the "Top Agent" or "Ex-Employee" status, depending on the outcome.</li>
+</ul>
+<p>Steps to display game over stats:</p>
+<pre><code>$ UIEndGame.cs initializes the end game screen data via InitEndGameScreenData()
+$ PlayerStatsManager.cs provides the necessary player statistics
+$ LocalPlayerStatEntry.cs and OtherPlayerStatEntry.cs populate the player stat cards
+$ GameManager.cs determines the winner, and UIEndGame.cs displays this on the screen
+$ UIEndGame.cs animates the end game screen and displays final accolades
+</code></pre>
+
 <h2>Contributing</h2>
 <p>Fork the repository and submit a pull request with your improvements or bug fixes.</p>
 
