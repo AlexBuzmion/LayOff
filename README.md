@@ -330,7 +330,7 @@ $ Exit sign lights change color, and the minimap highlights the exit room
 
 <!-- SCENARIO5 -->
 <h2 id="scenario5"> :small_orange_diamond: Trap Placement</h2>
-<p>Trap placement is a strategic gameplay mechanic that allows players to hinder opponents by setting traps at key locations. The process involves several scripts that manage the selection, positioning, and confirmation of trap placement.</p>
+<p>Trap placement is a strategic gameplay mechanic that allows players to hinder opponents by setting traps at key locations. The process involves several scripts that manage the selection, positioning, confirmation of trap placement, and visual feedback on the HUD.</p>
 <p align="center"> 
 <img src="./ReadMeAssets/trapPlacement.gif" alt="Trap Placement GIF">
 </p>
@@ -370,6 +370,7 @@ Post-Placement Actions
   <li>The trap's <code>TrapTrigger</code> script is instantiated, with specific traps inheriting from the base class <code>TrapTrigger</code> (e.g., <code>DetonatorTrap.cs</code>, <code>BouncingBetty.cs</code>, <code>CeilingTrap.cs</code>, <code>PoisonDart.cs</code>).</li>
   <li>At instantiation, the owner ID of the trap is set using <code>PhotonNetwork.LocalActor.ActorNr</code>. This ID is passed to the <code>TrapEffect</code> child classes later when the trap is triggered to identify who inflicted damage.</li>
   <li>The base class <code>TrapTrigger</code> starts a coroutine to enable the trap after a 3-second delay, during which the trap is initially disabled. This is visually demonstrated by a radial wheel filling up, showing the trap indicator above the trap for the trap owner, while making the game object invisible to the other players.</li>
+  <li>Upon successful trap placement, a game event is sent to the <code>HUDManager.cs</code> to notify it of the trap type used. The <code>HUDManager</code> then runs a coroutine to simulate the visual feedback of the trap's cooldown by adjusting the image's fill on the HUD.</li>
 </ul>
 <p>Steps to place or cancel a trap:</p>
 <pre><code>$ Press 1-4 to select a trap
@@ -377,6 +378,7 @@ $ The trap is rendered, and HUD updates with trap details via HUDManager.cs
 $ Rotate the mouse to reposition the trap hologram
 $ Confirm placement with left-click, or cancel with right-click or any non-directional movement
 $ If placed, custom properties are updated, and TrapTrigger is instantiated
+$ HUDManager.cs receives the trap type and runs a cooldown visual feedback
 $ The trap becomes active after 3 seconds, indicated by a radial wheel and trap indicator
 </code></pre>
 
